@@ -46,6 +46,10 @@ class RegisterRequest extends FormRequest
                     'password' => 'required|min:6',
                     'referral_code' => 'nullable',
                     'long_lived_access_token' => 'nullable|boolean',
+                    'employer_org_name' => 'required_if:type,employer',
+                    'employer_org_core_services' => 'required_if:type,employer',
+                    'employer_org_size' => 'required_if:type,employer',
+                    'employer_org_contact' => 'required',
                 ];
             case 'PUT':
             case 'PATCH':

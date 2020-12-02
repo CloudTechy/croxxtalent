@@ -17,6 +17,9 @@ use App\Models\User;
 use App\Models\Verification;
 use App\Models\Audit;
 use App\Mail\WelcomeVerifyEmail;
+use App\Mail\EmployerApplication;
+use \DB;
+use \Exception;
 
 class AuthController extends Controller
 {
@@ -119,68 +122,97 @@ class AuthController extends Controller
     public function register(RegisterRequest $request)
     {
         // Retrieve the validated input data....
-        $validatedData = $request->validated();
-        // check if user was referred
-        if ($validatedData['type'] == 'talent' && isset($validatedData['referral_code']) && $validatedData['referral_code']) {
-            $referralUser = User::where('referral_code', $validatedData['referral_code'])->first();
-            if ($referralUser) {
-                $validatedData['referral_user_id'] = $referralUser->id;
-                unset($validatedData['referral_code']);
-            }
-        }
-        if ($validatedData['type'] == 'affiliate') {
-            $validatedData['referral_code'] = (string) Str::orderedUuid();
-        }
-
-        $user = User::create($validatedData);
-        if ($user) {
-
-            $abilities = [];
-            // update the sanctum token expiration to the custom highest_expiration if the requested token is for a long-lived token
-            $long_lived_access_token = isset($validatedData['long_lived_access_token']) ? true : false;
-            if ($long_lived_access_token === true) {
-                \Config::set('sanctum.expiration', config('sanctum.highest_expiration') );
-                array_push($abilities, 'long_lived_access_token');
-            }
-            // create token
-            array_push($abilities, "access:{$user->type}");
-            $token =  $user->createToken('access-token', $abilities)->plainTextToken;
-
-            // save audit trail log
-            $old_values = [];
-            $new_values = $validatedData;
-            Audit::log($user->id, 'register', $old_values, $new_values, User::class, $user->id);
-
-            // create and send email verification token records
-            $verification = new Verification();
-            $verification->action = "register";
-            $verification->sent_to = $user->email;
-            $verification->metadata = null;
-            $verification->is_otp = false;
-            $verification = $user->verifications()->save($verification);
-            if ($verification && $user->email) {
-                if (config('mail.queue_send')) {
-                    Mail::to($user->email)->queue(new WelcomeVerifyEmail($user, $verification));
-                } else {
-                    Mail::to($user->email)->send(new WelcomeVerifyEmail($user, $verification));
+        try {
+            DB::beginTransaction();
+        
+            $validatedData = $request->validated();
+            // check if user was referred
+            if ($validatedData['type'] == 'talent' && isset($validatedData['referral_code']) && $validatedData['referral_code']) {
+                $referralUser = User::where('referral_code', $validatedData['referral_code'])->first();
+                if ($referralUser) {
+                    $validatedData['referral_user_id'] = $referralUser->id;
+                    unset($validatedData['referral_code']);
                 }
             }
-            
-            // format token data
-            $responseData = $this->tokenData($token);
-            $responseData['user'] = $user;
-            
+            if ($validatedData['type'] == 'affiliate') {
+                $validatedData['referral_code'] = (string) Str::orderedUuid();
+            }
+
+            // check if user is an employer
+            if(isset($validatedData['type']) && $validatedData['type'] == "employer"){
+                $validatedData['is_active'] = false;
+            }
+
+            $user = User::create($validatedData);
+            if ($user) {
+
+                $abilities = [];
+                // update the sanctum token expiration to the custom highest_expiration if the requested token is for a long-lived token
+                $long_lived_access_token = isset($validatedData['long_lived_access_token']) ? true : false;
+                if ($long_lived_access_token === true) {
+                    \Config::set('sanctum.expiration', config('sanctum.highest_expiration') );
+                    array_push($abilities, 'long_lived_access_token');
+                }
+                // create token
+                array_push($abilities, "access:{$user->type}");
+                $token =  $user->createToken('access-token', $abilities)->plainTextToken;
+
+                // save audit trail log
+                $old_values = [];
+                $new_values = $validatedData;
+                Audit::log($user->id, 'register', $old_values, $new_values, User::class, $user->id);
+
+                // create and send email verification token records
+                $verification = new Verification();
+                $verification->action = "register";
+                $verification->sent_to = $user->email;
+                $verification->metadata = null;
+                $verification->is_otp = false;
+                $verification = $user->verifications()->save($verification);
+                if ($verification && $user->email) {
+                    if (config('mail.queue_send')) {
+                        Mail::to($user->email)->queue(new WelcomeVerifyEmail($user, $verification));
+                    } else {
+                        Mail::to($user->email)->send(new WelcomeVerifyEmail($user, $verification));
+                    }
+                }
+
+                // email to all of the admin if user is employer
+                // if($user->type == "employer"){
+                //     if (config('mail.queue_send')) {
+                //         Mail::to('conyekelu@yahoo.com')->queue(new EmployerApplication($user, User::first()));
+                //     } else {
+                //         Mail::to('conyekelu@yahoo.com')->send(new EmployerApplication($user, User::first()));
+                //     }
+                // }
+                
+                // format token data
+                $responseData = $this->tokenData($token);
+                $responseData['user'] = $user;
+                DB::commit();
+                $message = $user->type === "employer"
+                            ? "User \"{$user->name}\"  your application was submitted successfully and it is being reviewed at the moment."
+                            :  "User \"{$user->name}\" created successfully.";
+                return response()->json([
+                    'status' => true, 
+                    'message' => $message,
+                    'data' => $responseData
+                ], 201);
+            } else {
+                return response()->json([
+                    'status' => false, 
+                    'message' => "Could not complete request.",
+                ], 400);
+            } 
+
+
+        } catch (Exception $e) {
+            DB::rollback();
             return response()->json([
-                'status' => true, 
-                'message' => "User \"{$user->name}\" created successfully.",
-                'data' => $responseData
-            ], 201);
-        } else {
-            return response()->json([
-                'status' => false, 
-                'message' => "Could not complete request.",
-            ], 400);
-        }      
+                    'status' => false, 
+                    'message' => $e->getMessage(),
+                ], 400);
+        }     
     }
 
    /**

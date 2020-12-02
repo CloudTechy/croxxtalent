@@ -41,10 +41,14 @@ class UserRequest extends FormRequest
                 return [];
             case 'POST':
                 return [
-                    'type' => 'required|in:talent,employer,affiliate', // optional for admin
+                    'type' => 'required|in:talent,employer,affiliate', // optional for admin 
                     'first_name' => 'required|max:30',
                     'last_name' => 'required|max:30',
                     'email' => 'required|email|max:150|unique:users,email',
+                    'employer_org_name' => 'required_if:type,employer',
+                    'employer_org_core_services' => 'required_if:type,employer',
+                    'employer_org_size' => 'required_if:type,employer',
+                    'employer_org_contact' => 'required',
                 ];
             case 'PUT':
             case 'PATCH':

@@ -19,6 +19,10 @@ class CreateUsersTable extends Migration
             $table->string('first_name', 30);
             $table->string('last_name', 30);
             $table->string('company_name', 100)->nullable();
+            $table->string('employer_org_name', 100)->nullable();
+            $table->string('employer_org_core_services', 500)->nullable();
+            $table->string('employer_org_size', 100)->nullable();
+            $table->string('employer_org_contact', 100)->nullable();
             $table->string('phone', 25)->nullable();
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();

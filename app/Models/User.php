@@ -71,6 +71,11 @@ class User extends Authenticatable
         'company_name',
         'referral_user_id',
         'referral_code',
+        'employer_org_name',
+        'employer_org_core_services',
+        'employer_org_size',
+        'employer_org_contact',
+        'is_active',
     ];
 
     /**

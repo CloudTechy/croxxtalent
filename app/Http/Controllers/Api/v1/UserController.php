@@ -19,6 +19,7 @@ use App\Models\Cv;
 use App\Models\JobInvitation;
 use App\Models\Audit;
 use App\Mail\WelcomeVerifyEmail;
+use App\Mail\EmployerApplication;
 use App\Mail\VerifyEditEmail;
 use App\Mail\PasswordReset;
 use App\Mail\PasswordChanged;
@@ -81,10 +82,25 @@ class UserController extends Controller
     {
         // Authorization was declared in the Form Request
 
+
+
         // Retrieve the validated input data...
         $validatedData = $request->validated();
+        //process employer application 
+        if(isset($validatedData['type']) && $validatedData['type'] == "employer"){
+            $validatedData['is_active'] = false;
+        }
         $user = User::create($validatedData);
         if ($user) {
+            // email to any of the admin if user is employer
+            if($user->type == "employer"){
+                if (config('mail.queue_send')) {
+                    Mail::to($user->email)->queue(new EmployerApplication($user));
+                } else {
+                    Mail::to($user->email)->send(new EmployerApplication($user));
+                }
+            }
+
             // save audit trail log
             $old_values = [];
             $new_values = $validatedData;

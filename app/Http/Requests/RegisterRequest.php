@@ -49,7 +49,7 @@ class RegisterRequest extends FormRequest
                     'employer_org_name' => 'required_if:type,employer',
                     'employer_org_core_services' => 'required_if:type,employer',
                     'employer_org_size' => 'required_if:type,employer',
-                    'employer_org_contact' => 'required',
+                    'employer_org_contact' => 'required_if:type,employer',
                 ];
             case 'PUT':
             case 'PATCH':
